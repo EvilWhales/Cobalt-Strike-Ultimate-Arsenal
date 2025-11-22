@@ -1,0 +1,27 @@
+# Example BOF EnableWebDAVClient beacon BOF 
+# The alias EnableWebDAVClient enable the webdav client service on the host
+# Usage: EnableWebDAVClient
+#
+# Example:
+#    EnableWebDAVClient
+#
+
+# Helper function to execute a single test BOF
+# $1 - beacon id
+# $2 - base name of BOF to run
+# $3 - args to pass to BOF
+
+beacon_command_register(
+"EnableWebDAVClient",
+"Enable the WebDAV client service without elevated permissions",
+"usage: EnableWebDAVClient");
+
+alias EnableWebDAVClient {
+
+    # read in our BOF file...
+    $handle = openf(script_resource("EnableWebDAVClient.o"));
+    $data   = readb($handle, -1);
+    closef($handle);
+
+    beacon_inline_execute($1, $data, "go", $null);
+}

