@@ -1,5 +1,8 @@
 <h3 align="center"> Cobalt Strike Ultimate Arsenal</h3>
 
+<div align="center">
+<img src="https://github.com/user-attachments/assets/1ad87909-580e-4483-a68d-738600941ff8" />
+
 <p align="center">
   <i>
     <br>(A public collection of open resources for Cobalt Strike (only legal use in Red Team and penetration testing).
