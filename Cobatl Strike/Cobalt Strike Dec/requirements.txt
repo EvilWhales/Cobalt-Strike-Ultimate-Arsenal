@@ -1,0 +1,7 @@
+pefile
+peutils
+minidump
+pyzipper
+colorama
+pycryptodome
+hexdump
