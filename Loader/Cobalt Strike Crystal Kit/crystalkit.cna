@@ -1,0 +1,74 @@
+import crystalpalace.spec.* from: crystalpalace.jar;
+import java.util.HashMap;
+
+sub print_info {
+   println(formatDate("[HH:mm:ss] ") . "\cE[Crystal Kit]\o " . $1);
+}
+
+set BEACON_RDLL_GENERATE {
+    local('$beacon $arch $file_path $spec $final');
+
+    $beacon = $2;
+    $arch   = $3;
+
+    if ($arch eq "x86") {
+        warn("Crystal Kit is x64 only");
+        return $null;
+    }
+
+    # get path to spec file
+    $file_path = getFileProper(script_resource("udrl"), "loader.spec");
+
+    # parse the spec
+    print_info("Parsing  $+ $file_path $+ ...");
+    $spec = [LinkSpec Parse: $file_path];
+
+    # apply the spec
+    print_info("Applying spec...");
+    $final = [$spec run: $beacon, [new HashMap]];
+
+    if (strlen($final) == 0) {
+        warn("Failed to build payload");
+        return $null;
+    }
+
+    print_info("Payload Size: " . strlen($final) . " bytes");
+
+    return $final;
+}
+
+set BEACON_RDLL_SIZE {
+   return "0";
+}
+
+set POSTEX_RDLL_GENERATE {   
+    local('$postex $arch $file_path $spec $final');
+   
+    $postex = $2;
+    $arch   = $3;
+
+    if ($arch eq "x86") {
+        warn("Crystal Kit is x64 only");
+        return $null;
+    }
+
+    # get path to spec file
+    $file_path = getFileProper(script_resource("postex-udrl"), "loader.spec");
+
+    # parse the spec
+    print_info("Parsing  $+ $file_path $+ ...");
+    $spec = [LinkSpec Parse: $file_path];
+
+    # apply the spec
+    print_info("Applying spec...");
+    $final = [$spec run: $postex, [new HashMap]];
+
+    if (strlen($final) == 0) {
+       warn("Failed to build package");
+       return $null;
+    }
+
+    print_info("Final Size: " . strlen($final) . " bytes");
+
+    return $final;
+}
